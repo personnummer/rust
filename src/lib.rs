@@ -45,7 +45,7 @@ impl Error for PersonnummerError {}
 #[allow(dead_code)]
 /// Personnummer holds relevant data to check for valid personal identity numbers.
 pub struct Personnummer {
-    date: chrono::NaiveDate,
+    pub date: chrono::NaiveDate,
     serial: u32,
     control: u8,
     divider: char,
