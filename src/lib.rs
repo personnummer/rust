@@ -182,14 +182,12 @@ impl Personnummer {
     pub fn get_age(&self) -> i32 {
         let now = Utc::now();
 
-        if self.date.month() > now.month() {
+        if self.date.month() > now.month()
+            || self.date.month() == now.month() && self.date.day() > now.day()
+        {
             now.year() - self.date.year() - 1
         } else {
-            if self.date.month() == now.month() && self.date.day() > now.day() {
-                now.year() - self.date.year() - 1
-            } else {
-                now.year() - self.date.year()
-            }
+            now.year() - self.date.year()
         }
     }
 
