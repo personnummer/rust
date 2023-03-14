@@ -1,0 +1,4 @@
+name: "Rust"
+maintainer: "@bombsimon"
+spec: 3.0
+workflow: "rust.yml"
