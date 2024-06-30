@@ -43,7 +43,7 @@ impl fmt::Display for PersonnummerError {
 impl Error for PersonnummerError {}
 
 #[allow(dead_code)]
-/// Personnummer holds relevant data to check for valid personal identity numbers.
+/// [Personnummer] holds relevant data to check for valid personal identity numbers.
 pub struct Personnummer {
     date: chrono::NaiveDate,
     serial: u32,
@@ -52,7 +52,7 @@ pub struct Personnummer {
     coordination: bool,
 }
 
-/// FormattedPersonnummer holds two formats of a normalized personal identity number, one long and
+/// [FormattedPersonnummer] holds two formats of a normalized personal identity number, one long and
 /// one short format. The long format displays the full century while the short format only
 /// displays the year.
 pub struct FormattedPersonnummer {
@@ -61,12 +61,12 @@ pub struct FormattedPersonnummer {
 }
 
 impl FormattedPersonnummer {
-    /// Returns the long format of a formatted personal identity number as a String.
+    /// Returns the long format of a formatted personal identity number as a [String].
     pub fn long(&self) -> String {
         self.long.clone()
     }
 
-    /// Returns the short format of a formatted personal identity number as a String.
+    /// Returns the short format of a formatted personal identity number as a [String].
     pub fn short(&self) -> String {
         self.short.clone()
     }
@@ -127,19 +127,19 @@ impl TryFrom<&str> for Personnummer {
 }
 
 impl Personnummer {
-    /// Returns a new instance of a Personnummer. Panics for invalid dates but not for invalid
-    /// personal identity numbers. Use valid() to check validity.
+    /// Returns a new instance of a [Personnummer]. Panics for invalid dates but not for invalid
+    /// personal identity numbers. Use [Personnummer::valid()] to check validity.
     pub fn new(pnr: &str) -> Result<Personnummer, PersonnummerError> {
         Personnummer::try_from(pnr)
     }
 
-    /// Same as new() but returns an Option instead of panicing on invalid dates.
+    /// Same as [Personnummer::new()] but returns an [Option] instead of panicing on invalid dates.
     pub fn parse(pnr: &str) -> Result<Personnummer, PersonnummerError> {
         Personnummer::try_from(pnr)
     }
 
-    /// Returns a FormattedPersonnummer from a Personnummer which can be used to display a
-    /// normalized version of the Personnummer.
+    /// Returns a [FormattedPersonnummer] from a [Personnummer] which can be used to display a
+    /// normalized version of the [Personnummer].
     pub fn format(&self) -> FormattedPersonnummer {
         let day = self.date.day();
         let day_or_coordination = if self.coordination {
@@ -162,7 +162,7 @@ impl Personnummer {
         FormattedPersonnummer { long, short }
     }
 
-    /// Validate a Personnummer. The validation requires a valid date and that the Luhn checksum
+    /// Validate a [Personnummer]. The validation requires a valid date and that the Luhn checksum
     /// matches the control digit.
     pub fn valid(&self) -> bool {
         let ymd = format!(
@@ -206,17 +206,17 @@ impl Personnummer {
         self.coordination
     }
 
-    /// Year of date of birth.
+    /// Year of birth date.
     pub fn year(&self) -> i32 {
         self.date.year()
     }
 
-    /// Month of date of birth.
+    /// Month of birth date.
     pub fn month(&self) -> u32 {
         self.date.month()
     }
 
-    /// Day of date of birth.
+    /// Day of birth date.
     pub fn day(&self) -> u32 {
         self.date.day()
     }
