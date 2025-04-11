@@ -228,7 +228,6 @@ impl Personnummer {
             self.serial
         );
 
-        println!("Control: {:?} {:?}", to_control, luhn(to_control.clone()));
         self.serial > 0 && luhn(to_control) == self.control
     }
 
