@@ -4,7 +4,12 @@ extern crate lazy_static;
 use chrono::{Datelike, NaiveDate, Utc};
 use regex::{Match, Regex};
 
-use std::{convert::TryFrom, error::Error, fmt};
+use std::{
+    convert::TryFrom,
+    error::Error,
+    fmt::{self, Display},
+    str::FromStr,
+};
 
 lazy_static! {
     static ref PNR_REGEX: Regex = Regex::new(
@@ -14,7 +19,7 @@ lazy_static! {
         (?P<year>\d{2})      # Year with two digits
         (?P<month>\d{2})     # Month
         (?P<day>\d{2})       # Day
-        (?P<divider>[-+]?)?  # Divider can be - or +
+        (?P<sep>[-+]?)?      # Seperator can be - or +
         (?P<number>\d{3})    # At least three digits
         (?P<control>\d?)     # And an optional control digit
         $"
@@ -42,13 +47,12 @@ impl fmt::Display for PersonnummerError {
 
 impl Error for PersonnummerError {}
 
-#[allow(dead_code)]
 /// [Personnummer] holds relevant data to check for valid personal identity numbers.
 pub struct Personnummer {
     date: chrono::NaiveDate,
     serial: u32,
     control: u8,
-    divider: char,
+    seperator: Seperator,
     coordination: bool,
 }
 
@@ -61,14 +65,44 @@ pub struct FormattedPersonnummer {
 }
 
 impl FormattedPersonnummer {
-    /// Returns the long format of a formatted personal identity number as a [String].
+    /// Returns the [long format](https://github.com/personnummer/meta/tree/master?tab=readme-ov-file#long-format)
+    /// of a formatted personal identity number as a [String].
     pub fn long(&self) -> String {
         self.long.clone()
     }
 
-    /// Returns the short format of a formatted personal identity number as a [String].
+    /// Returns the [short format](https://github.com/personnummer/meta/tree/master?tab=readme-ov-file#short-format)
+    /// of a formatted personal identity number as a [String].
     pub fn short(&self) -> String {
         self.short.clone()
+    }
+}
+
+/// [Seperator] is used by the short format to seperate birth date and serial information.
+/// A plus sign (+) indicates that the age is over 100 years.
+#[derive(Debug, Copy, Clone)]
+pub enum Seperator {
+    Plus,
+    Minus,
+}
+impl FromStr for Seperator {
+    type Err = PersonnummerError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "-" => Ok(Self::Minus),
+            "+" => Ok(Self::Plus),
+            _ => Err(PersonnummerError::InvalidInput),
+        }
+    }
+}
+
+impl Display for Seperator {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Seperator::Plus => write!(f, "+"),
+            Seperator::Minus => write!(f, "-"),
+        }
     }
 }
 
@@ -80,19 +114,17 @@ impl TryFrom<&str> for Personnummer {
             .captures(pnr)
             .ok_or(PersonnummerError::InvalidInput)?;
 
-        let century = match caps.name("century") {
-            Some(m) => m.as_str().parse::<u32>().unwrap_or(19) * 100,
-            None => 1900,
-        };
-
         let match_to_u32 =
             |m: Option<Match<'_>>| -> u32 { m.unwrap().as_str().parse::<u32>().unwrap_or(0) };
 
+        let century = caps
+            .name("century")
+            .and_then(|v| v.as_str().parse::<u32>().ok());
         let year = match_to_u32(caps.name("year"));
         let month = match_to_u32(caps.name("month"));
         let day = match_to_u32(caps.name("day"));
+        let seperator = caps.name("sep").unwrap().as_str().parse::<Seperator>().ok();
         let serial = match_to_u32(caps.name("number"));
-
         let control = caps
             .name("control")
             .unwrap()
@@ -100,15 +132,28 @@ impl TryFrom<&str> for Personnummer {
             .parse::<u8>()
             .unwrap_or(0);
 
-        let divider = caps
-            .name("divider")
-            .unwrap()
-            .as_str()
-            .parse::<char>()
-            .unwrap_or('\0');
+        let current_year = Utc::now().year() as u32;
+        let (century, seperator) = match century {
+            Some(century) => {
+                if current_year - (century * 100 + year) >= 100 {
+                    (century, Seperator::Plus)
+                } else {
+                    (century, Seperator::Minus)
+                }
+            }
+            None => {
+                let (base_year, seperator) = match seperator {
+                    Some(Seperator::Plus) => (current_year - 100, Seperator::Plus),
+                    _ => (current_year, Seperator::Minus),
+                };
+
+                let century = (base_year - ((base_year - year) % 100)) / 100;
+                (century, seperator)
+            }
+        };
 
         let date = match NaiveDate::from_ymd_opt(
-            (century + year) as i32,
+            (century * 100 + year) as i32,
             month,
             day % COORDINATION_NUMBER,
         ) {
@@ -120,21 +165,16 @@ impl TryFrom<&str> for Personnummer {
             date,
             serial,
             control,
-            divider,
-            coordination: (day > 31),
+            seperator,
+            coordination: day > COORDINATION_NUMBER,
         })
     }
 }
 
 impl Personnummer {
-    /// Returns a new instance of a [Personnummer]. Panics for invalid dates but not for invalid
-    /// personal identity numbers. Use [Personnummer::valid()] to check validity.
+    /// Returns a new instance of a [Personnummer]. Returns an error for invalid dates but not
+    /// for invalid personal identity numbers. Use [Personnummer::valid()] to check validity.
     pub fn new(pnr: &str) -> Result<Personnummer, PersonnummerError> {
-        Personnummer::try_from(pnr)
-    }
-
-    /// Same as [Personnummer::new()] but returns an [Option] instead of panicing on invalid dates.
-    pub fn parse(pnr: &str) -> Result<Personnummer, PersonnummerError> {
         Personnummer::try_from(pnr)
     }
 
@@ -149,7 +189,7 @@ impl Personnummer {
         };
 
         let long = format!(
-            "{}{:02}{:02}-{:03}{}",
+            "{:04}{:02}{:02}{:03}{}",
             self.date.year(),
             self.date.month(),
             day_or_coordination,
@@ -157,7 +197,15 @@ impl Personnummer {
             self.control
         );
 
-        let short = String::from(&long[2..]);
+        let short = format!(
+            "{:02}{:02}{:02}{}{:03}{}",
+            self.date.year() % 100,
+            self.date.month(),
+            day_or_coordination,
+            self.seperator,
+            self.serial,
+            self.control
+        );
 
         FormattedPersonnummer { long, short }
     }
@@ -165,14 +213,20 @@ impl Personnummer {
     /// Validate a [Personnummer]. The validation requires a valid date and that the Luhn checksum
     /// matches the control digit.
     pub fn valid(&self) -> bool {
-        let ymd = format!(
-            "{:02}{:02}{:02}",
+        let day = self.date.day();
+        let day_or_coordination = if self.coordination {
+            day + COORDINATION_NUMBER
+        } else {
+            day
+        };
+
+        let to_control = format!(
+            "{:02}{:02}{:02}{:03}",
             self.date.year() % 100,
             self.date.month(),
-            self.date.day()
+            day_or_coordination,
+            self.serial
         );
-
-        let to_control = format!("{:06}{:03}", ymd, self.serial);
 
         self.serial > 0 && luhn(to_control) == self.control
     }
@@ -225,6 +279,11 @@ impl Personnummer {
     pub fn serial(&self) -> u32 {
         self.serial
     }
+
+    /// The seperator between birthdate and serial.
+    pub fn seperator(&self) -> Seperator {
+        self.seperator
+    }
 }
 
 /// Calculate the checksum based on luhn algorithm. See more information here:
@@ -253,7 +312,7 @@ mod tests {
         let cases = vec!["19901301-1111", "2017-02-29", "", "not-a-date"];
 
         for tc in cases {
-            assert!(Personnummer::parse(tc).is_err());
+            assert!(Personnummer::new(tc).is_err());
         }
     }
 
@@ -287,6 +346,21 @@ mod tests {
     }
 
     #[test]
+    fn test_valid_pn_invalid_seperator() {
+        let cases = vec![
+            "19900101/0017",
+            "19640823_3234",
+            "000101 0107",
+            "510818S9167",
+            "1913040102931",
+        ];
+
+        for tc in cases {
+            assert!(Personnummer::new(tc).is_err());
+        }
+    }
+
+    #[test]
     fn test_age() {
         let now = Utc::now();
 
@@ -297,7 +371,7 @@ mod tests {
         let leap_years_in_100_years = 100 / 4;
         let hundred_years_ago = (days_in_a_year * 100) + leap_years_in_100_years;
 
-        let twenty_tomorrow_date = (now - Duration::days(twenty_years_ago - 1)).date();
+        let twenty_tomorrow_date = (now - Duration::days(twenty_years_ago - 1)).date_naive();
         let twenty_tomorrow = format!(
             "{}{:02}{:02}-1111",
             twenty_tomorrow_date.year(),
@@ -305,7 +379,7 @@ mod tests {
             twenty_tomorrow_date.day()
         );
 
-        let twenty_yesterday_date = (now - Duration::days(twenty_years_ago + 1)).date();
+        let twenty_yesterday_date = (now - Duration::days(twenty_years_ago + 1)).date_naive();
         let twenty_yesterday = format!(
             "{}{:02}{:02}-1111",
             twenty_yesterday_date.year(),
@@ -313,7 +387,7 @@ mod tests {
             twenty_yesterday_date.day()
         );
 
-        let hundred_years_ago_date = (now - Duration::days(hundred_years_ago)).date();
+        let hundred_years_ago_date = (now - Duration::days(hundred_years_ago)).date_naive();
         let hundred_years_age = format!(
             "{}{:02}{:02}-1111",
             hundred_years_ago_date.year(),
@@ -355,15 +429,66 @@ mod tests {
     fn test_coordination() {
         let mut cases: HashMap<&str, bool> = HashMap::new();
 
-        cases.insert("800161-3294", true);
+        cases.insert("800161-3291", true);
         cases.insert("800101-3294", false);
         cases.insert("640327-3813", false);
+        cases.insert("250561-0275", true);
 
         for (pnr, is_coordination) in cases {
             let p = Personnummer::new(pnr).unwrap();
-
             assert!(p.valid());
             assert_eq!(p.is_coordination_number(), is_coordination);
+        }
+    }
+
+    #[test]
+    fn test_format() {
+        let mut cases: HashMap<&str, FormattedPersonnummer> = HashMap::new();
+
+        cases.insert(
+            "20000101-2392",
+            FormattedPersonnummer {
+                long: "200001012392".into(),
+                short: "000101-2392".into(),
+            },
+        );
+        cases.insert(
+            "000101-2392",
+            FormattedPersonnummer {
+                long: "200001012392".into(),
+                short: "000101-2392".into(),
+            },
+        );
+        cases.insert(
+            "000101+2392",
+            FormattedPersonnummer {
+                long: "190001012392".into(),
+                short: "000101+2392".into(),
+            },
+        );
+        // malformed but should be able to be handled
+        cases.insert(
+            "18680404-0043",
+            FormattedPersonnummer {
+                long: "186804040043".into(),
+                short: "680404+0043".into(),
+            },
+        );
+        // coordination number
+        cases.insert(
+            "950161-2395",
+            FormattedPersonnummer {
+                long: "199501612395".into(),
+                short: "950161-2395".into(),
+            },
+        );
+
+        for (pnr, formatted) in cases {
+            let p = Personnummer::new(pnr).unwrap();
+
+            assert!(p.valid());
+            assert_eq!(p.format().long, formatted.long);
+            assert_eq!(p.format().short, formatted.short);
         }
     }
 }
