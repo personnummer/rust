@@ -437,7 +437,6 @@ mod tests {
 
         for (pnr, is_coordination) in cases {
             let p = Personnummer::new(pnr).unwrap();
-            println!("{:?}", p.format().short);
             assert!(p.valid());
             assert_eq!(p.is_coordination_number(), is_coordination);
         }
