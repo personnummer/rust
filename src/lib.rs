@@ -247,7 +247,7 @@ impl Personnummer {
 
     /// Check if the person holding the personal identity number is a female.
     pub fn is_female(&self) -> bool {
-        (self.serial % 10) % 2 == 0
+        (self.serial % 10).is_multiple_of(2)
     }
 
     /// Check if the person holding the personal identity number is a male.
