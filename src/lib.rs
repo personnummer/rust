@@ -65,13 +65,13 @@ pub struct FormattedPersonnummer {
 }
 
 impl FormattedPersonnummer {
-    /// Returns the [long format](https://github.com/personnummer/meta/tree/master?tab=readme-ov-file#long-format)
+    /// Returns the [long format](https://github.com/personnummer/meta/tree/main?tab=readme-ov-file#long-format)
     /// of a formatted personal identity number as a [String].
     pub fn long(&self) -> String {
         self.long.clone()
     }
 
-    /// Returns the [short format](https://github.com/personnummer/meta/tree/master?tab=readme-ov-file#short-format)
+    /// Returns the [short format](https://github.com/personnummer/meta/tree/main?tab=readme-ov-file#short-format)
     /// of a formatted personal identity number as a [String].
     pub fn short(&self) -> String {
         self.short.clone()
