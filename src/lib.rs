@@ -1,6 +1,3 @@
-#[macro_use]
-extern crate lazy_static;
-
 use chrono::{Datelike, NaiveDate, Utc};
 use regex::{Match, Regex};
 
@@ -9,10 +6,11 @@ use std::{
     error::Error,
     fmt::{self, Display},
     str::FromStr,
+    sync::LazyLock,
 };
 
-lazy_static! {
-    static ref PNR_REGEX: Regex = Regex::new(
+static PNR_REGEX: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(
         r"(?x)
         ^                    # Starts with
         (?P<century>\d{2})?  # Maybe the century
@@ -22,10 +20,10 @@ lazy_static! {
         (?P<sep>[-+]?)?      # Seperator can be - or +
         (?P<number>\d{3})    # At least three digits
         (?P<control>\d?)     # And an optional control digit
-        $"
+        $",
     )
-    .unwrap();
-}
+    .unwrap()
+});
 
 /// The extra value added to coordination numbers.
 const COORDINATION_NUMBER: u32 = 60;

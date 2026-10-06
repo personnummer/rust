@@ -10,9 +10,5 @@ homepage = "https://personnummer.dev"
 repository = "https://github.com/personnummer/rust"
 
 [dependencies]
-chrono = { version = "0.4", default-features = false, features = [
-    "clock",
-    "std",
-] }
-lazy_static = "1.4.0"
+chrono = { version = "0.4.45", default-features = false, features = ["clock", "std"] }
 regex = "1"
